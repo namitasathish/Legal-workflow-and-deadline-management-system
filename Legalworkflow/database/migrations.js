@@ -3,7 +3,7 @@
  * Keep this file append-only: add new migration blocks as versions increase.
  */
 
-const DB_VERSION = 5;
+const DB_VERSION = 8;
 
 /**
  * @param {import('expo-sqlite').SQLiteDatabase} db
@@ -228,6 +228,169 @@ export async function migrateIfNeeded(db) {
     `);
 
     currentVersion = 5;
+  }
+
+  // v6 - Client Portal, Document Requests, Messaging, Payments, Milestones, Appointments, Feedback
+  if (currentVersion < 6) {
+    // Extend users table for role-based auth
+    try { await db.execAsync(`ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'lawyer';`); } catch (e) { }
+    try { await db.execAsync(`ALTER TABLE users ADD COLUMN linked_client_id TEXT REFERENCES clients(id) ON DELETE SET NULL;`); } catch (e) { }
+
+    await db.execAsync(`
+      -- Document Requests (lawyer requests docs from client)
+      CREATE TABLE IF NOT EXISTS document_requests (
+        id TEXT PRIMARY KEY NOT NULL,
+        case_id TEXT NOT NULL,
+        requested_by TEXT NOT NULL,
+        title TEXT NOT NULL,
+        description TEXT,
+        status TEXT NOT NULL DEFAULT 'Pending',
+        uploaded_doc_id TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (case_id) REFERENCES cases(id) ON DELETE CASCADE,
+        FOREIGN KEY (uploaded_doc_id) REFERENCES documents(id) ON DELETE SET NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_doc_requests_case ON document_requests(case_id);
+      CREATE INDEX IF NOT EXISTS idx_doc_requests_status ON document_requests(status);
+
+      -- In-App Messages (per-case chat between lawyer and client)
+      CREATE TABLE IF NOT EXISTS messages (
+        id TEXT PRIMARY KEY NOT NULL,
+        case_id TEXT NOT NULL,
+        sender_id TEXT NOT NULL,
+        sender_role TEXT NOT NULL,
+        body TEXT NOT NULL,
+        is_read INTEGER DEFAULT 0,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (case_id) REFERENCES cases(id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_messages_case ON messages(case_id);
+
+      -- Payment Tracking
+      CREATE TABLE IF NOT EXISTS payments (
+        id TEXT PRIMARY KEY NOT NULL,
+        case_id TEXT NOT NULL,
+        client_id TEXT,
+        type TEXT NOT NULL DEFAULT 'fee',
+        description TEXT NOT NULL,
+        amount REAL NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'Pending',
+        due_date TEXT,
+        paid_date TEXT,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (case_id) REFERENCES cases(id) ON DELETE CASCADE,
+        FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_payments_case ON payments(case_id);
+      CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status);
+
+      -- Case Milestones (timeline events)
+      CREATE TABLE IF NOT EXISTS case_milestones (
+        id TEXT PRIMARY KEY NOT NULL,
+        case_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        description TEXT,
+        milestone_date TEXT NOT NULL,
+        icon TEXT DEFAULT '📌',
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (case_id) REFERENCES cases(id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_milestones_case ON case_milestones(case_id);
+
+      -- Appointments (client books with lawyer)
+      CREATE TABLE IF NOT EXISTS appointments (
+        id TEXT PRIMARY KEY NOT NULL,
+        client_id TEXT NOT NULL,
+        lawyer_id TEXT,
+        case_id TEXT,
+        title TEXT NOT NULL,
+        appointment_date TEXT NOT NULL,
+        duration_minutes INTEGER NOT NULL DEFAULT 30,
+        status TEXT NOT NULL DEFAULT 'Requested',
+        notes TEXT,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
+        FOREIGN KEY (case_id) REFERENCES cases(id) ON DELETE SET NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_appointments_client ON appointments(client_id);
+      CREATE INDEX IF NOT EXISTS idx_appointments_date ON appointments(appointment_date);
+
+      -- Satisfaction Feedback (client rates closed cases)
+      CREATE TABLE IF NOT EXISTS feedback (
+        id TEXT PRIMARY KEY NOT NULL,
+        case_id TEXT NOT NULL UNIQUE,
+        client_id TEXT NOT NULL,
+        rating INTEGER NOT NULL,
+        comment TEXT,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (case_id) REFERENCES cases(id) ON DELETE CASCADE,
+        FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_feedback_case ON feedback(case_id);
+    `);
+
+    // Seed demo client user linked to Arjun Sharma (cl_1)
+    const now = new Date().toISOString();
+    await db.runAsync(
+      `INSERT OR IGNORE INTO users (id, name, email, password, created_at, role, linked_client_id) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      ['u_client_demo', 'Arjun Sharma', 'demo_client@gmail.com', 'password123', now, 'client', 'cl_1']
+    );
+
+    // Update existing demo lawyer user to have role = 'lawyer'
+    await db.runAsync(`UPDATE users SET role = 'lawyer' WHERE id = 'u_demo'`);
+
+    // Seed document requests
+    await db.runAsync(
+      `INSERT OR IGNORE INTO document_requests (id, case_id, requested_by, title, description, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      ['dreq_1', 'c_1', 'u_demo', 'Aadhaar Card Copy', 'Please upload a clear scanned copy of your Aadhaar card for identity verification.', 'Pending', now, now]
+    );
+    await db.runAsync(
+      `INSERT OR IGNORE INTO document_requests (id, case_id, requested_by, title, description, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      ['dreq_2', 'c_1', 'u_demo', 'Property Registration Deed', 'Upload the original property deed for the disputed plot.', 'Pending', now, now]
+    );
+
+    // Seed milestones
+    await db.runAsync(
+      `INSERT OR IGNORE INTO case_milestones (id, case_id, title, description, milestone_date, icon, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      ['ms_1', 'c_1', 'Case Filed', 'Property dispute case filed at High Court.', now, '📋', now]
+    );
+    await db.runAsync(
+      `INSERT OR IGNORE INTO case_milestones (id, case_id, title, description, milestone_date, icon, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      ['ms_2', 'c_1', 'First Hearing Scheduled', 'Initial hearing date assigned by the court.', now, '🏛️', now]
+    );
+
+    // Seed a payment
+    await db.runAsync(
+      `INSERT OR IGNORE INTO payments (id, case_id, client_id, type, description, amount, status, due_date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ['pay_1', 'c_1', 'cl_1', 'fee', 'Case Filing & Registration Fee', 15000, 'Pending', now, now]
+    );
+    await db.runAsync(
+      `INSERT OR IGNORE INTO payments (id, case_id, client_id, type, description, amount, status, due_date, paid_date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ['pay_2', 'c_1', 'cl_1', 'fee', 'Consultation Fee', 5000, 'Paid', now, now, now]
+    );
+
+    currentVersion = 6;
+  }
+
+  // v7 - Add is_read to messages for lawyer notifications
+  if (currentVersion < 7) {
+    try {
+      await db.execAsync(`ALTER TABLE messages ADD COLUMN is_read INTEGER DEFAULT 0;`);
+    } catch (e) {
+      console.log('Migration v7 error:', e);
+    }
+    currentVersion = 7;
+  }
+
+  // v8 - Fallback for is_read in case v7 was skipped or failed silently
+  if (currentVersion < 8) {
+    try {
+      await db.execAsync(`ALTER TABLE messages ADD COLUMN is_read INTEGER DEFAULT 0;`);
+    } catch (e) {
+      // Ignored if column already exists
+    }
+    currentVersion = 8;
   }
 
   await db.execAsync(`PRAGMA user_version = ${DB_VERSION};`);

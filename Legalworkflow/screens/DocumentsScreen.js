@@ -3,26 +3,81 @@ import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, Alert, S
 import { useNavigation } from '@react-navigation/native';
 import { getDb, makeId } from '../database/db';
 import { useApp } from '../context/AppContext';
-import { colors } from '../constants/colors';
+import { useTheme } from '../context/ThemeContext';
+import LoadingState from '../components/LoadingState';
 
 const CATEGORIES = ['Evidence', 'Court Order', 'Agreement', 'Correspondence', 'ID Proof', 'Other'];
 
+const createStyles = (colors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
+  header: {
+    paddingTop: 48, paddingHorizontal: 16, paddingBottom: 12,
+    borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.surface,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+  },
+  h1: { fontSize: 16, fontWeight: '900', color: colors.text },
+  link: { color: colors.primary, fontWeight: '900' },
+  searchRow: { padding: 16, paddingBottom: 0 },
+  searchInput: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, color: colors.text },
+  filterRow: { flexDirection: 'row', gap: 6, paddingHorizontal: 16, paddingVertical: 10, flexWrap: 'wrap' },
+  filterPill: { borderWidth: 1, borderColor: colors.border, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: colors.surface },
+  filterOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  filterText: { fontWeight: '700', color: colors.text, fontSize: 12 },
+  filterTextOn: { color: colors.white },
+  form: { margin: 16, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  uploadBtn: { backgroundColor: colors.primary, borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
+  uploadBtnText: { color: colors.white, fontWeight: '900' },
+  orText: { textAlign: 'center', color: colors.textSecondary, fontSize: 12, marginVertical: 6 },
+  label: { fontWeight: '800', color: colors.textSecondary, fontSize: 12, textTransform: 'uppercase', marginTop: 8, marginBottom: 4 },
+  input: { backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, color: colors.text, marginTop: 4 },
+  pillsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  pill: { borderWidth: 1, borderColor: colors.border, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: colors.surface },
+  pillOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  pillText: { color: colors.text, fontWeight: '700', fontSize: 12 },
+  pillTextOn: { color: colors.white },
+  saveBtn: { marginTop: 10, backgroundColor: colors.primary, borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
+  saveBtnDisabled: { opacity: 0.6 },
+  saveBtnText: { color: colors.white, fontWeight: '900' },
+  sectionHeader: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 },
+  sectionTitle: { fontWeight: '900', color: colors.textSecondary, fontSize: 12, textTransform: 'uppercase' },
+  card: {
+    marginHorizontal: 16, marginBottom: 8, padding: 12,
+    borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface,
+    flexDirection: 'row', alignItems: 'flex-start',
+  },
+  docName: { fontWeight: '900', color: colors.text },
+  meta: { marginTop: 2, color: colors.textSecondary, fontSize: 12 },
+  cardActions: { marginLeft: 10, gap: 8, alignItems: 'flex-end' },
+  openBtn: { backgroundColor: colors.primary, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
+  openBtnText: { color: colors.white, fontWeight: '800', fontSize: 12 },
+  danger: { color: colors.error, fontWeight: '900', fontSize: 13 },
+  empty: { padding: 16, color: colors.textSecondary },
+});
+
 export default function DocumentsScreen() {
   const navigation = useNavigation();
-  const { cases, clientsById, logActivity } = useApp();
+  const { cases, clientsById, logActivity, loading } = useApp();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [docs, setDocs] = useState([]);
+  const [docsLoading, setDocsLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [clientFilter, setClientFilter] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [draft, setDraft] = useState({ name: '', category: 'Other', tags: '', case_id: '' });
 
   const refresh = useCallback(async () => {
-    const db = await getDb();
-    const rows = await db.getAllAsync(
-      `SELECT d.*, c.case_title FROM documents d LEFT JOIN cases c ON d.case_id = c.id ORDER BY datetime(d.created_at) DESC`
-    );
-    setDocs(rows ?? []);
+    setDocsLoading(true);
+    try {
+      const db = await getDb();
+      const rows = await db.getAllAsync(
+        `SELECT d.*, c.case_title FROM documents d LEFT JOIN cases c ON d.case_id = c.id ORDER BY datetime(d.created_at) DESC`
+      );
+      setDocs(rows ?? []);
+    } finally {
+      setDocsLoading(false);
+    }
   }, []);
 
   useEffect(() => { refresh(); }, [refresh]);
@@ -136,6 +191,10 @@ export default function DocumentsScreen() {
     return [...clientIds].map((id) => clientsById.get(id)).filter(Boolean);
   }, [docs, cases, clientsById]);
 
+  if (loading || docsLoading) {
+    return <LoadingState message="Loading documents..." />;
+  }
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -242,49 +301,3 @@ export default function DocumentsScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  header: {
-    paddingTop: 48, paddingHorizontal: 16, paddingBottom: 12,
-    borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.surface,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-  },
-  h1: { fontSize: 16, fontWeight: '900', color: colors.text },
-  link: { color: colors.primary, fontWeight: '900' },
-  searchRow: { padding: 16, paddingBottom: 0 },
-  searchInput: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, color: colors.text },
-  filterRow: { flexDirection: 'row', gap: 6, paddingHorizontal: 16, paddingVertical: 10, flexWrap: 'wrap' },
-  filterPill: { borderWidth: 1, borderColor: colors.border, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: colors.surface },
-  filterOn: { backgroundColor: colors.primary, borderColor: colors.primary },
-  filterText: { fontWeight: '700', color: colors.text, fontSize: 12 },
-  filterTextOn: { color: colors.white },
-  form: { margin: 16, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
-  uploadBtn: { backgroundColor: colors.primary, borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
-  uploadBtnText: { color: colors.white, fontWeight: '900' },
-  orText: { textAlign: 'center', color: colors.textSecondary, fontSize: 12, marginVertical: 6 },
-  label: { fontWeight: '800', color: colors.textSecondary, fontSize: 12, textTransform: 'uppercase', marginTop: 8, marginBottom: 4 },
-  input: { backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, color: colors.text, marginTop: 4 },
-  pillsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  pill: { borderWidth: 1, borderColor: colors.border, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: colors.surface },
-  pillOn: { backgroundColor: colors.primary, borderColor: colors.primary },
-  pillText: { color: colors.text, fontWeight: '700', fontSize: 12 },
-  pillTextOn: { color: colors.white },
-  saveBtn: { marginTop: 10, backgroundColor: colors.primary, borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
-  saveBtnDisabled: { opacity: 0.6 },
-  saveBtnText: { color: colors.white, fontWeight: '900' },
-  sectionHeader: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 },
-  sectionTitle: { fontWeight: '900', color: colors.textSecondary, fontSize: 12, textTransform: 'uppercase' },
-  card: {
-    marginHorizontal: 16, marginBottom: 8, padding: 12,
-    borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface,
-    flexDirection: 'row', alignItems: 'flex-start',
-  },
-  docName: { fontWeight: '900', color: colors.text },
-  meta: { marginTop: 2, color: colors.textSecondary, fontSize: 12 },
-  cardActions: { marginLeft: 10, gap: 8, alignItems: 'flex-end' },
-  openBtn: { backgroundColor: colors.primary, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
-  openBtnText: { color: colors.white, fontWeight: '800', fontSize: 12 },
-  danger: { color: colors.error, fontWeight: '900', fontSize: 13 },
-  empty: { padding: 16, color: colors.textSecondary },
-});

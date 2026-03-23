@@ -3,19 +3,58 @@ import { View, Text, TouchableOpacity, StyleSheet, SectionList } from 'react-nat
 import { useNavigation } from '@react-navigation/native';
 import { useApp } from '../context/AppContext';
 import { groupByDay } from '../utils/deadlineEngine';
-import { colors } from '../constants/colors';
+import { useTheme } from '../context/ThemeContext';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-function workloadLabel(count) {
+function workloadLabel(colors, count) {
   if (count >= 8) return { text: '🔴 Heavy', color: colors.error };
   if (count >= 4) return { text: '🟡 Medium', color: colors.warning };
   return { text: '🟢 Light', color: colors.success };
 }
 
+const createStyles = (colors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
+  header: {
+    paddingTop: 48, paddingHorizontal: 16, paddingBottom: 12,
+    borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.surface,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+  },
+  h1: { fontSize: 16, fontWeight: '900', color: colors.text },
+  link: { color: colors.primary, fontWeight: '900' },
+  summary: { padding: 16, paddingBottom: 8 },
+  summaryText: { color: colors.textSecondary, fontWeight: '700' },
+  dayHeader: {
+    flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8,
+    borderTopWidth: 1, borderTopColor: colors.border,
+  },
+  dayTitle: { fontSize: 15, fontWeight: '900', color: colors.text },
+  dayMeta: { color: colors.textSecondary, fontSize: 12, fontWeight: '700', marginTop: 2 },
+  workloadBadge: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
+  workloadText: { fontWeight: '800', fontSize: 12 },
+  itemCard: {
+    marginHorizontal: 16, marginBottom: 6, padding: 12,
+    borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface,
+    flexDirection: 'row', alignItems: 'center',
+  },
+  taskCard: { borderLeftWidth: 3, borderLeftColor: colors.success },
+  taskIcon: { marginRight: 10, fontSize: 16 },
+  itemTitle: { fontWeight: '800', color: colors.text, flex: 1 },
+  itemMeta: { color: colors.textSecondary, fontSize: 12, marginTop: 2 },
+  prepWarning: { color: colors.warning, fontWeight: '700', fontSize: 12, marginTop: 4 },
+  priorityBadge: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, marginLeft: 8 },
+  priorityHigh: { backgroundColor: colors.errorLight },
+  priorityMed: { backgroundColor: colors.infoLight },
+  priorityLow: { backgroundColor: colors.successLight },
+  priorityText: { fontSize: 11, fontWeight: '800', color: colors.text },
+  empty: { padding: 24, textAlign: 'center', color: colors.textSecondary },
+});
+
 export default function WeeklyScreen() {
   const navigation = useNavigation();
   const { weeklyCases, tasks, clientsById, tasksByCaseId } = useApp();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const sections = useMemo(() => {
     const groups = groupByDay(weeklyCases);
@@ -27,13 +66,11 @@ export default function WeeklyScreen() {
       const label = `${dayName}, ${key}`;
       const casesForDay = groups[key] || [];
 
-      // Tasks due on this day
       const tasksForDay = (tasks || []).filter((t) => {
         if (t.completed) return false;
         return t.due_date && t.due_date.startsWith(key);
       });
 
-      // Check if any case has incomplete tasks (preparation needed)
       const prepNeeded = casesForDay.some((c) => {
         const ct = tasksByCaseId.get(c.id) || [];
         return ct.some((t) => !t.completed);
@@ -71,7 +108,7 @@ export default function WeeklyScreen() {
           </View>
         )}
         renderSectionHeader={({ section }) => {
-          const wl = workloadLabel(section.caseCount + section.taskCount);
+          const wl = workloadLabel(colors, section.caseCount + section.taskCount);
           return (
             <View style={styles.dayHeader}>
               <View style={{ flex: 1 }}>
@@ -123,40 +160,3 @@ export default function WeeklyScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  header: {
-    paddingTop: 48, paddingHorizontal: 16, paddingBottom: 12,
-    borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.surface,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-  },
-  h1: { fontSize: 16, fontWeight: '900', color: colors.text },
-  link: { color: colors.primary, fontWeight: '900' },
-  summary: { padding: 16, paddingBottom: 8 },
-  summaryText: { color: colors.textSecondary, fontWeight: '700' },
-  dayHeader: {
-    flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8,
-    borderTopWidth: 1, borderTopColor: colors.border,
-  },
-  dayTitle: { fontSize: 15, fontWeight: '900', color: colors.text },
-  dayMeta: { color: colors.textSecondary, fontSize: 12, fontWeight: '700', marginTop: 2 },
-  workloadBadge: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
-  workloadText: { fontWeight: '800', fontSize: 12 },
-  itemCard: {
-    marginHorizontal: 16, marginBottom: 6, padding: 12,
-    borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface,
-    flexDirection: 'row', alignItems: 'center',
-  },
-  taskCard: { borderLeftWidth: 3, borderLeftColor: colors.success },
-  taskIcon: { marginRight: 10, fontSize: 16 },
-  itemTitle: { fontWeight: '800', color: colors.text, flex: 1 },
-  itemMeta: { color: colors.textSecondary, fontSize: 12, marginTop: 2 },
-  prepWarning: { color: colors.warning, fontWeight: '700', fontSize: 12, marginTop: 4 },
-  priorityBadge: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, marginLeft: 8 },
-  priorityHigh: { backgroundColor: '#fde8e8' },
-  priorityMed: { backgroundColor: '#dbeafe' },
-  priorityLow: { backgroundColor: '#dcfce7' },
-  priorityText: { fontSize: 11, fontWeight: '800', color: colors.text },
-  empty: { padding: 24, textAlign: 'center', color: colors.textSecondary },
-});

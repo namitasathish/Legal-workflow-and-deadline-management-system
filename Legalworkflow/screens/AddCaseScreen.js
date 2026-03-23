@@ -1,11 +1,71 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Platform } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useApp } from '../context/AppContext';
-import { colors } from '../constants/colors';
+import Header from '../components/Header';
+import { useTheme } from '../context/ThemeContext';
+import { theme, buildTypography } from '../constants/theme';
 
 const priorities = ['High', 'Medium', 'Low'];
 const statuses = ['Open', 'In Progress', 'On Hold', 'Closed', 'Archived'];
+
+const createDpStyles = (colors) => StyleSheet.create({
+  wrapper: { marginBottom: 16 },
+  label: { fontSize: 13, fontWeight: '700', color: colors.slate700, marginBottom: 8 },
+  touchable: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.slate200,
+    borderRadius: 10, paddingHorizontal: 16, paddingVertical: 14,
+  },
+  text: { fontSize: 15, color: colors.slate800 },
+  placeholder: { color: colors.slate400 },
+  icon: { fontSize: 16 },
+  clearBtn: { marginTop: 4, alignSelf: 'flex-end' },
+  clearText: { fontSize: 12, color: colors.error, fontWeight: '700' },
+});
+
+function DatePickerField({ label, value, onChange }) {
+  const { colors } = useTheme();
+  const dpStyles = useMemo(() => createDpStyles(colors), [colors]);
+  const [show, setShow] = useState(false);
+  const dateObj = value ? new Date(value) : null;
+  const displayText = dateObj && !isNaN(dateObj.getTime())
+    ? dateObj.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' })
+    : '';
+
+  const handleChange = (event, selectedDate) => {
+    setShow(Platform.OS === 'ios');
+    if (selectedDate) {
+      onChange(selectedDate.toISOString().slice(0, 10));
+    }
+  };
+
+  return (
+    <View style={dpStyles.wrapper}>
+      <Text style={dpStyles.label}>{label}</Text>
+      <TouchableOpacity style={dpStyles.touchable} onPress={() => setShow(true)}>
+        <Text style={[dpStyles.text, !displayText && dpStyles.placeholder]}>
+          {displayText || 'Tap to select date'}
+        </Text>
+        <Text style={dpStyles.icon}>📅</Text>
+      </TouchableOpacity>
+      {value ? (
+        <TouchableOpacity onPress={() => onChange('')} style={dpStyles.clearBtn}>
+          <Text style={dpStyles.clearText}>Clear</Text>
+        </TouchableOpacity>
+      ) : null}
+      {show && (
+        <DateTimePicker
+          value={dateObj && !isNaN(dateObj.getTime()) ? dateObj : new Date()}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={handleChange}
+        />
+      )}
+    </View>
+  );
+}
 
 export default function AddCaseScreen() {
   const navigation = useNavigation();
@@ -13,6 +73,8 @@ export default function AddCaseScreen() {
   const editCaseId = route.params?.caseId || null;
 
   const { cases, clients, createCase, updateCase } = useApp();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const existing = useMemo(() => cases.find((c) => c.id === editCaseId) || null, [cases, editCaseId]);
 
   const [caseTitle, setCaseTitle] = useState(existing?.case_title || '');
@@ -54,114 +116,204 @@ export default function AddCaseScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.link}>Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.h1}>{existing ? 'Edit Case' : 'Add Case'}</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <Header
+        title={existing ? 'Edit Case' : 'New Case'}
+        showBack
+        onBack={() => navigation.goBack()}
+      />
 
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.label}>Case Title *</Text>
-        <TextInput value={caseTitle} onChangeText={setCaseTitle} style={styles.input} placeholder="Case title" />
+        <View style={styles.formGroup}>
+          <Text style={styles.label}>General Information</Text>
+          <View style={styles.inputWrapper}>
+            <Text style={styles.inputLabel}>Case Title *</Text>
+            <TextInput
+              value={caseTitle}
+              onChangeText={setCaseTitle}
+              style={styles.input}
+              placeholder="e.g. State vs John Doe"
+              placeholderTextColor={colors.slate400}
+            />
+          </View>
 
-        <Text style={styles.label}>Court Name</Text>
-        <TextInput value={courtName} onChangeText={setCourtName} style={styles.input} placeholder="Court name" />
+          <View style={styles.inputWrapper}>
+            <Text style={styles.inputLabel}>Court / Forum</Text>
+            <TextInput
+              value={courtName}
+              onChangeText={setCourtName}
+              style={styles.input}
+              placeholder="e.g. High Court, Bench III"
+              placeholderTextColor={colors.slate400}
+            />
+          </View>
+        </View>
 
-        <Text style={styles.label}>Link Client</Text>
-        <View style={styles.pillsRow}>
-          <TouchableOpacity
-            style={[styles.pill, !clientId ? styles.pillOn : null]}
-            onPress={() => setClientId('')}
-          >
-            <Text style={[styles.pillText, !clientId ? styles.pillTextOn : null]}>None</Text>
-          </TouchableOpacity>
-          {clients.map((c) => (
+        <View style={styles.formGroup}>
+          <Text style={styles.label}>Client Connection</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillsRow}>
             <TouchableOpacity
-              key={c.id}
-              style={[styles.pill, clientId === c.id ? styles.pillOn : null]}
-              onPress={() => setClientId(c.id)}
+              style={[styles.pill, !clientId ? styles.pillActive : null]}
+              onPress={() => setClientId('')}
             >
-              <Text style={[styles.pillText, clientId === c.id ? styles.pillTextOn : null]} numberOfLines={1}>
-                {c.name}
-              </Text>
+              <Text style={[styles.pillText, !clientId ? styles.pillTextActive : null]}>Unlinked</Text>
             </TouchableOpacity>
-          ))}
-        </View>
-        <Text style={styles.hint}>Tip: Add clients from the Clients screen first.</Text>
-
-        <Text style={styles.label}>Filing Date (YYYY-MM-DD)</Text>
-        <TextInput value={filingDate} onChangeText={setFilingDate} style={styles.input} placeholder="2026-02-07" />
-
-        <Text style={styles.label}>Next Hearing Date (YYYY-MM-DD)</Text>
-        <TextInput value={nextHearing} onChangeText={setNextHearing} style={styles.input} placeholder="2026-03-01" />
-
-        <Text style={styles.label}>Deadline Date (YYYY-MM-DD)</Text>
-        <TextInput value={deadline} onChangeText={setDeadline} style={styles.input} placeholder="2026-02-15" />
-
-        <Text style={styles.label}>Priority</Text>
-        <View style={styles.pillsRow}>
-          {priorities.map((p) => (
-            <TouchableOpacity key={p} style={[styles.pill, priority === p ? styles.pillOn : null]} onPress={() => setPriority(p)}>
-              <Text style={[styles.pillText, priority === p ? styles.pillTextOn : null]}>{p}</Text>
-            </TouchableOpacity>
-          ))}
+            {clients.map((c) => (
+              <TouchableOpacity
+                key={c.id}
+                style={[styles.pill, clientId === c.id ? styles.pillActive : null]}
+                onPress={() => setClientId(c.id)}
+              >
+                <Text style={[styles.pillText, clientId === c.id ? styles.pillTextActive : null]} numberOfLines={1}>
+                  {c.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+          <Text style={styles.hint}>Clients can be managed in the directory.</Text>
         </View>
 
-        <Text style={styles.label}>Status</Text>
-        <View style={styles.pillsRow}>
-          {statuses.map((s) => (
-            <TouchableOpacity key={s} style={[styles.pill, status === s ? styles.pillOn : null]} onPress={() => setStatus(s)}>
-              <Text style={[styles.pillText, status === s ? styles.pillTextOn : null]}>{s}</Text>
-            </TouchableOpacity>
-          ))}
+        <View style={styles.formGroup}>
+          <Text style={styles.label}>Timelines & Deadlines</Text>
+          <View style={styles.row}>
+            <View style={{ flex: 1 }}>
+              <DatePickerField label="Filing Date" value={filingDate} onChange={setFilingDate} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <DatePickerField label="Next Hearing" value={nextHearing} onChange={setNextHearing} />
+            </View>
+          </View>
+          <DatePickerField label="Final Deadline" value={deadline} onChange={setDeadline} />
         </View>
 
-        <Text style={styles.label}>Notes</Text>
-        <TextInput
-          value={notes}
-          onChangeText={setNotes}
-          style={[styles.input, styles.textArea]}
-          multiline
-          placeholder="Notes"
-        />
+        <View style={styles.formGroup}>
+          <Text style={styles.label}>Priority & Status</Text>
+          <View style={styles.pillsRow}>
+            {priorities.map((p) => (
+              <TouchableOpacity key={p} style={[styles.pill, priority === p ? styles.pillActive : null]} onPress={() => setPriority(p)}>
+                <Text style={[styles.pillText, priority === p ? styles.pillTextActive : null]}>{p}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <View style={[styles.pillsRow, { marginTop: 12 }]}>
+            {statuses.map((s) => (
+              <TouchableOpacity key={s} style={[styles.pill, status === s ? styles.pillActive : null]} onPress={() => setStatus(s)}>
+                <Text style={[styles.pillText, status === s ? styles.pillTextActive : null]}>{s}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
 
-        <TouchableOpacity style={[styles.saveBtn, (!caseTitle.trim() || saving) ? styles.saveBtnDisabled : null]} onPress={handleSave} disabled={!caseTitle.trim() || saving}>
-          <Text style={styles.saveBtnText}>{saving ? 'Saving…' : 'Save'}</Text>
+        <View style={styles.formGroup}>
+          <Text style={styles.label}>Notes & Brief</Text>
+          <TextInput
+            value={notes}
+            onChangeText={setNotes}
+            style={[styles.input, styles.textArea]}
+            multiline
+            placeholder="Add relevant case details..."
+            placeholderTextColor={colors.slate400}
+          />
+        </View>
+
+        <TouchableOpacity
+          style={[styles.saveBtn, (!caseTitle.trim() || saving) ? styles.btnDisabled : null]}
+          onPress={handleSave}
+          disabled={!caseTitle.trim() || saving}
+        >
+          <Text style={styles.saveBtnText}>{saving ? 'Saving Entries...' : 'Save Case Information'}</Text>
         </TouchableOpacity>
       </ScrollView>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors) => {
+  const typo = buildTypography(colors);
+  return StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  header: {
-    paddingTop: 48,
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.surface,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  content: { padding: theme.spacing.lg, paddingBottom: 60 },
+  formGroup: {
+    marginBottom: 24,
   },
-  h1: { fontSize: 16, fontWeight: '800', color: colors.text },
-  link: { color: colors.primary, fontWeight: '800' },
-  content: { padding: 16, paddingBottom: 40 },
-  label: { marginTop: 12, marginBottom: 6, fontWeight: '800', color: colors.textSecondary, fontSize: 12, textTransform: 'uppercase' },
-  hint: { marginTop: 6, color: colors.textSecondary, fontSize: 12 },
-  input: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, color: colors.text },
-  textArea: { minHeight: 90, textAlignVertical: 'top' },
-  pillsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  pill: { borderWidth: 1, borderColor: colors.border, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: colors.surface, maxWidth: '100%' },
-  pillOn: { backgroundColor: colors.primary, borderColor: colors.primary },
-  pillText: { color: colors.text, fontWeight: '700' },
-  pillTextOn: { color: colors.white },
-  saveBtn: { marginTop: 18, backgroundColor: colors.primary, borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
-  saveBtnDisabled: { opacity: 0.6 },
-  saveBtnText: { color: colors.white, fontWeight: '900' },
+  label: {
+    ...typo.tiny,
+    color: colors.slate500,
+    letterSpacing: 1,
+    marginBottom: 16,
+    textTransform: 'uppercase',
+  },
+  inputWrapper: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    ...typo.caption,
+    color: colors.slate700,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  input: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.slate200,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    ...typo.body,
+    color: colors.slate800,
+  },
+  textArea: {
+    minHeight: 120,
+    textAlignVertical: 'top',
+  },
+  row: {
+    flexDirection: 'row',
+    gap: theme.spacing.md,
+  },
+  pillsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  pill: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.slate200,
+    borderRadius: theme.radius.full,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  pillActive: {
+    backgroundColor: colors.slate800,
+    borderColor: colors.slate800,
+  },
+  pillText: {
+    ...typo.caption,
+    color: colors.slate600,
+  },
+  pillTextActive: {
+    color: colors.white,
+    fontWeight: '800',
+  },
+  hint: {
+    ...typo.tiny,
+    color: colors.slate400,
+    marginTop: 8,
+  },
+  saveBtn: {
+    backgroundColor: colors.primary,
+    paddingVertical: 16,
+    borderRadius: theme.radius.md,
+    alignItems: 'center',
+    marginTop: 12,
+    ...theme.shadows.md,
+  },
+  btnDisabled: {
+    opacity: 0.6,
+  },
+  saveBtnText: {
+    ...typo.subtitle,
+    color: colors.white,
+  },
 });
+};
 

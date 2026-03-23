@@ -2,6 +2,7 @@ import React, { createContext, useContext, useMemo, useState, useCallback, useEf
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getDb, makeId } from '../database/db';
 import { getUrgentCases, getWeeklyCases, getTodayCases } from '../utils/deadlineEngine';
+import { hashPassword, verifyPassword } from '../utils/crypto';
 import {
   requestNotificationPermission,
   scheduleCaseAlerts,
@@ -18,17 +19,32 @@ export function AppProvider({ children }) {
   const [clients, setClients] = useState([]);
   const [tasks, setTasks] = useState([]);
 
-  // -------- AUTH LOGIC --------
-  const register = useCallback(async (name, email, password) => {
+  // -------- AUTH LOGIC (role-aware) --------
+  const register = useCallback(async (name, email, password, role = 'lawyer') => {
     const db = await getDb();
     const id = makeId('u');
     const now = new Date().toISOString();
-    try {
-      await db.runAsync(
-        'INSERT INTO users (id, name, email, password, created_at) VALUES (?, ?, ?, ?, ?)',
-        [id, name.trim(), email.trim().toLowerCase(), password, now]
+    let linked_client_id = null;
+
+    if (role === 'client') {
+      // Look up existing client record by email
+      const clientRow = await db.getFirstAsync(
+        'SELECT id FROM clients WHERE LOWER(email) = ?',
+        [email.trim().toLowerCase()]
       );
-      const newUser = { id, name, email };
+      if (!clientRow) {
+        return { success: false, error: 'Your lawyer has not added your profile yet. Please ask your lawyer to add your email in their Clients section first.' };
+      }
+      linked_client_id = clientRow.id;
+    }
+
+    try {
+      const hashedPwd = hashPassword(password);
+      await db.runAsync(
+        'INSERT INTO users (id, name, email, password, created_at, role, linked_client_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [id, name.trim(), email.trim().toLowerCase(), hashedPwd, now, role, linked_client_id]
+      );
+      const newUser = { id, name, email: email.trim().toLowerCase(), role, linked_client_id };
       await AsyncStorage.setItem(USER_SESSION_KEY, JSON.stringify(newUser));
       setUser(newUser);
       return { success: true };
@@ -41,13 +57,21 @@ export function AppProvider({ children }) {
   const login = useCallback(async (email, password) => {
     const db = await getDb();
     try {
+      const safeEmail = email.trim().toLowerCase();
+      // Failsafe: if this is a demo account, ensure its password is reset to 'password123'
+      // in case a previous hashing migration corrupted it locally.
+      if (safeEmail === 'demo@gmail.com' || safeEmail === 'demo_client@gmail.com') {
+        await db.runAsync("UPDATE users SET password = 'password123' WHERE email = ?", [safeEmail]);
+      }
+
       const u = await db.getFirstAsync(
-        'SELECT id, name, email FROM users WHERE email = ? AND password = ?',
-        [email.trim().toLowerCase(), password]
+        'SELECT id, name, email, password, role, linked_client_id FROM users WHERE email = ?',
+        [safeEmail]
       );
-      if (u) {
-        await AsyncStorage.setItem(USER_SESSION_KEY, JSON.stringify(u));
-        setUser(u);
+      if (u && verifyPassword(password, u.password)) {
+        const sessionUser = { id: u.id, name: u.name, email: u.email, role: u.role || 'lawyer', linked_client_id: u.linked_client_id };
+        await AsyncStorage.setItem(USER_SESSION_KEY, JSON.stringify(sessionUser));
+        setUser(sessionUser);
         return { success: true };
       }
       return { success: false, error: 'Invalid email or password.' };
@@ -418,6 +442,327 @@ export function AppProvider({ children }) {
     return { rows, totalClosed, avgDuration, byCourt };
   }, []);
 
+  // -------- DOCUMENT REQUESTS --------
+  const createDocumentRequest = useCallback(async (caseId, title, description) => {
+    const db = await getDb();
+    const id = makeId('dreq');
+    const now = new Date().toISOString();
+    await db.runAsync(
+      'INSERT INTO document_requests (id, case_id, requested_by, title, description, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [id, caseId, user?.id || '', title.trim(), description?.trim() || '', 'Pending', now, now]
+    );
+    await logActivity('doc_request', id, 'created', `Requested document: ${title.trim()}`);
+    return id;
+  }, [user, logActivity]);
+
+  const getDocumentRequests = useCallback(async (caseId) => {
+    const db = await getDb();
+    const rows = await db.getAllAsync(
+      'SELECT dr.*, d.name as doc_name, d.uri as doc_uri FROM document_requests dr LEFT JOIN documents d ON dr.uploaded_doc_id = d.id WHERE dr.case_id = ? ORDER BY datetime(dr.created_at) DESC',
+      [caseId]
+    );
+    return rows ?? [];
+  }, []);
+
+  const getClientDocumentRequests = useCallback(async (clientId) => {
+    const db = await getDb();
+    const rows = await db.getAllAsync(
+      `SELECT dr.*, c.case_title, d.name as doc_name
+       FROM document_requests dr
+       LEFT JOIN cases c ON dr.case_id = c.id
+       LEFT JOIN documents d ON dr.uploaded_doc_id = d.id
+       WHERE c.client_id = ?
+       ORDER BY datetime(dr.created_at) DESC`,
+      [clientId]
+    );
+    return rows ?? [];
+  }, []);
+
+  const uploadDocumentForRequest = useCallback(async (requestId, documentId) => {
+    const db = await getDb();
+    const now = new Date().toISOString();
+    await db.runAsync(
+      'UPDATE document_requests SET status = ?, uploaded_doc_id = ?, updated_at = ? WHERE id = ?',
+      ['Uploaded', documentId, now, requestId]
+    );
+    await logActivity('doc_request', requestId, 'uploaded', 'Client uploaded document');
+  }, [logActivity]);
+
+  const acceptDocumentUpload = useCallback(async (requestId) => {
+    const db = await getDb();
+    const now = new Date().toISOString();
+    await db.runAsync(
+      'UPDATE document_requests SET status = ?, updated_at = ? WHERE id = ?',
+      ['Accepted', now, requestId]
+    );
+    await logActivity('doc_request', requestId, 'accepted', 'Lawyer accepted document');
+  }, [logActivity]);
+
+  // -------- IN-APP MESSAGING --------
+  const sendMessage = useCallback(async (caseId, body) => {
+    const db = await getDb();
+    const id = makeId('msg');
+    const now = new Date().toISOString();
+    try {
+      await db.runAsync(
+        'INSERT INTO messages (id, case_id, sender_id, sender_role, body, is_read, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [id, caseId, user?.id || '', user?.role || 'lawyer', body.trim(), 0, now]
+      );
+    } catch (err) {
+      console.warn('sendMessage fallback (missing is_read):', err);
+      await db.runAsync(
+        'INSERT INTO messages (id, case_id, sender_id, sender_role, body, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+        [id, caseId, user?.id || '', user?.role || 'lawyer', body.trim(), now]
+      );
+    }
+    return id;
+  }, [user]);
+
+  const markMessagesAsRead = useCallback(async (caseId) => {
+    const db = await getDb();
+    // Mark messages from the OTHER role as read
+    const otherRole = user?.role === 'lawyer' ? 'client' : 'lawyer';
+    try {
+      await db.runAsync(
+        'UPDATE messages SET is_read = 1 WHERE case_id = ? AND sender_role = ?',
+        [caseId, otherRole]
+      );
+    } catch (err) {}
+  }, [user]);
+
+  const getUnreadCounts = useCallback(async (caseId) => {
+    const db = await getDb();
+    const isLawyer = user?.role === 'lawyer';
+    const otherRole = isLawyer ? 'client' : 'lawyer';
+    
+    // 1. Unread Messages
+    let msgRow = null;
+    try {
+      msgRow = await db.getFirstAsync(
+        'SELECT COUNT(*) as count FROM messages WHERE case_id = ? AND sender_role = ? AND is_read = 0',
+        [caseId, otherRole]
+      );
+    } catch (err) {
+      // is_read might not exist if migration failed
+      msgRow = { count: 0 };
+    }
+    
+    // 2. Pending Actions (Documents)
+    let docRow;
+    if (isLawyer) {
+      // Lawyer sees documents 'Uploaded' by client as unread
+      docRow = await db.getFirstAsync(
+        "SELECT COUNT(*) as count FROM document_requests WHERE case_id = ? AND status = 'Uploaded'",
+        [caseId]
+      );
+    } else {
+      // Client sees 'Pending' requests from lawyer as unread
+      docRow = await db.getFirstAsync(
+        "SELECT COUNT(*) as count FROM document_requests WHERE case_id = ? AND status = 'Pending'",
+        [caseId]
+      );
+    }
+
+    return {
+      messages: msgRow?.count || 0,
+      documents: docRow?.count || 0,
+    };
+  }, [user]);
+
+  const getMessages = useCallback(async (caseId) => {
+    const db = await getDb();
+    const rows = await db.getAllAsync(
+      'SELECT m.*, u.name as sender_name FROM messages m LEFT JOIN users u ON m.sender_id = u.id WHERE m.case_id = ? ORDER BY datetime(m.created_at) ASC',
+      [caseId]
+    );
+    return rows ?? [];
+  }, []);
+
+  // -------- PAYMENT TRACKING --------
+  const createPayment = useCallback(async (caseId, clientId, payload) => {
+    const db = await getDb();
+    const id = makeId('pay');
+    const now = new Date().toISOString();
+    await db.runAsync(
+      'INSERT INTO payments (id, case_id, client_id, type, description, amount, status, due_date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [id, caseId, clientId || null, payload.type || 'fee', payload.description?.trim() || '', payload.amount || 0, 'Pending', payload.due_date || null, now]
+    );
+    await logActivity('payment', id, 'created', `Added payment: ₹${payload.amount} - ${payload.description?.trim() || ''}`);
+    return id;
+  }, [logActivity]);
+
+  const getPayments = useCallback(async (caseId) => {
+    const db = await getDb();
+    const rows = await db.getAllAsync(
+      'SELECT * FROM payments WHERE case_id = ? ORDER BY datetime(created_at) DESC',
+      [caseId]
+    );
+    return rows ?? [];
+  }, []);
+
+  const getClientPayments = useCallback(async (clientId) => {
+    const db = await getDb();
+    const rows = await db.getAllAsync(
+      `SELECT p.*, c.case_title FROM payments p LEFT JOIN cases c ON p.case_id = c.id WHERE p.client_id = ? ORDER BY datetime(p.created_at) DESC`,
+      [clientId]
+    );
+    return rows ?? [];
+  }, []);
+
+  const markPaymentPaid = useCallback(async (paymentId) => {
+    const db = await getDb();
+    const now = new Date().toISOString();
+    await db.runAsync('UPDATE payments SET status = ?, paid_date = ? WHERE id = ?', ['Paid', now, paymentId]);
+    await logActivity('payment', paymentId, 'paid', 'Payment marked as paid');
+  }, [logActivity]);
+
+  // -------- CASE MILESTONES --------
+  const addMilestone = useCallback(async (caseId, payload) => {
+    const db = await getDb();
+    const id = makeId('ms');
+    const now = new Date().toISOString();
+    await db.runAsync(
+      'INSERT INTO case_milestones (id, case_id, title, description, milestone_date, icon, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [id, caseId, payload.title?.trim() || '', payload.description?.trim() || '', payload.milestone_date || now, payload.icon || '📌', now]
+    );
+    await logActivity('milestone', id, 'created', `Added milestone: ${payload.title?.trim() || ''}`);
+    return id;
+  }, [logActivity]);
+
+  const getMilestones = useCallback(async (caseId) => {
+    const db = await getDb();
+    const rows = await db.getAllAsync(
+      'SELECT * FROM case_milestones WHERE case_id = ? ORDER BY datetime(milestone_date) ASC',
+      [caseId]
+    );
+    return rows ?? [];
+  }, []);
+
+  // -------- APPOINTMENTS --------
+  const createAppointment = useCallback(async (clientId, payload) => {
+    const db = await getDb();
+    const id = makeId('appt');
+    const now = new Date().toISOString();
+    await db.runAsync(
+      'INSERT INTO appointments (id, client_id, lawyer_id, case_id, title, appointment_date, duration_minutes, status, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [id, clientId, payload.lawyer_id || null, payload.case_id || null, payload.title?.trim() || '', payload.appointment_date || '', payload.duration_minutes || 30, 'Requested', payload.notes?.trim() || '', now]
+    );
+    await logActivity('appointment', id, 'created', `Appointment requested: ${payload.title?.trim() || ''}`);
+    return id;
+  }, [logActivity]);
+
+  const getAppointments = useCallback(async (filterObj = {}) => {
+    const db = await getDb();
+    let query = `SELECT a.*, c.name as client_name, cs.case_title
+       FROM appointments a
+       LEFT JOIN clients c ON a.client_id = c.id
+       LEFT JOIN cases cs ON a.case_id = cs.id`;
+    const params = [];
+    if (filterObj.clientId) {
+      query += ' WHERE a.client_id = ?';
+      params.push(filterObj.clientId);
+    }
+    query += ' ORDER BY datetime(a.appointment_date) ASC';
+    const rows = await db.getAllAsync(query, params);
+    return rows ?? [];
+  }, []);
+
+  const updateAppointmentStatus = useCallback(async (appointmentId, status) => {
+    const db = await getDb();
+    await db.runAsync('UPDATE appointments SET status = ? WHERE id = ?', [status, appointmentId]);
+    await logActivity('appointment', appointmentId, 'status_changed', `Appointment ${status.toLowerCase()}`);
+  }, [logActivity]);
+
+  // -------- FEEDBACK --------
+  const submitFeedback = useCallback(async (caseId, clientId, rating, comment) => {
+    const db = await getDb();
+    const id = makeId('fb');
+    const now = new Date().toISOString();
+    await db.runAsync(
+      'INSERT OR REPLACE INTO feedback (id, case_id, client_id, rating, comment, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      [id, caseId, clientId, rating, comment?.trim() || '', now]
+    );
+    await logActivity('feedback', id, 'submitted', `Client rated case ${rating}/5`);
+    return id;
+  }, [logActivity]);
+
+  const getFeedback = useCallback(async (caseId) => {
+    const db = await getDb();
+    const row = await db.getFirstAsync('SELECT * FROM feedback WHERE case_id = ?', [caseId]);
+    return row || null;
+  }, []);
+
+  const getAllFeedback = useCallback(async () => {
+    const db = await getDb();
+    const rows = await db.getAllAsync(
+      `SELECT f.*, c.case_title, cl.name as client_name
+       FROM feedback f
+       LEFT JOIN cases c ON f.case_id = c.id
+       LEFT JOIN clients cl ON f.client_id = cl.id
+       ORDER BY datetime(f.created_at) DESC`
+    );
+    return rows ?? [];
+  }, []);
+
+  // -------- FIR HISTORY --------
+  const getFirHistory = useCallback(async () => {
+    const db = await getDb();
+    const rows = await db.getAllAsync(
+      `SELECT f.*, c.case_title FROM firs f LEFT JOIN cases c ON f.case_id = c.id ORDER BY datetime(f.created_at) DESC`
+    );
+    return rows ?? [];
+  }, []);
+
+  // -------- GLOBAL UNREAD COUNTS --------
+  const getGlobalUnreadCounts = useCallback(async () => {
+    const db = await getDb();
+    const isLawyer = user?.role === 'lawyer';
+    const otherRole = isLawyer ? 'client' : 'lawyer';
+
+    // 1. Unread messages
+    const msgRow = await db.getFirstAsync(
+      'SELECT COUNT(*) as count FROM messages WHERE sender_role = ? AND is_read = 0',
+      [otherRole]
+    );
+
+    // 2. Pending documents
+    let docCount = 0;
+    if (isLawyer) {
+      const docRow = await db.getFirstAsync(
+        "SELECT COUNT(*) as count FROM document_requests WHERE status = 'Uploaded'"
+      );
+      docCount = docRow?.count || 0;
+    } else {
+      const docRow = await db.getFirstAsync(
+        "SELECT COUNT(*) as count FROM document_requests WHERE status = 'Pending'"
+      );
+      docCount = docRow?.count || 0;
+    }
+
+    // 3. Appointment actions needed
+    let apptCount = 0;
+    if (isLawyer) {
+      // Lawyer sees new appointment requests from clients
+      const apptRow = await db.getFirstAsync(
+        "SELECT COUNT(*) as count FROM appointments WHERE status = 'Requested'"
+      );
+      apptCount = apptRow?.count || 0;
+    } else {
+      // Client sees confirmed appointments (new confirmations)
+      const apptRow = await db.getFirstAsync(
+        "SELECT COUNT(*) as count FROM appointments WHERE status = 'Confirmed'"
+      );
+      apptCount = apptRow?.count || 0;
+    }
+
+    return {
+      messages: msgRow?.count || 0,
+      documents: docCount,
+      appointments: apptCount,
+      total: (msgRow?.count || 0) + docCount + apptCount,
+    };
+  }, [user]);
+
   // -------- DEADLINE COMPANION --------
   const urgentCases = useMemo(() => getUrgentCases(cases), [cases]);
   const weeklyCases = useMemo(() => getWeeklyCases(cases), [cases]);
@@ -477,6 +822,37 @@ export function AppProvider({ children }) {
     // analytics
     getActivityLog,
     getClosedCaseStats,
+    // document requests
+    createDocumentRequest,
+    getDocumentRequests,
+    getClientDocumentRequests,
+    uploadDocumentForRequest,
+    acceptDocumentUpload,
+    // messaging
+    sendMessage,
+    getMessages,
+    markMessagesAsRead,
+    getUnreadCounts,
+    // payments
+    createPayment,
+    getPayments,
+    getClientPayments,
+    markPaymentPaid,
+    // milestones
+    addMilestone,
+    getMilestones,
+    // appointments
+    createAppointment,
+    getAppointments,
+    updateAppointmentStatus,
+    // feedback
+    submitFeedback,
+    getFeedback,
+    getAllFeedback,
+    // FIR history
+    getFirHistory,
+    // global unread
+    getGlobalUnreadCounts,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

@@ -1,11 +1,48 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, Alert } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { getDb, makeId } from '../database/db';
 import { useApp } from '../context/AppContext';
-import { colors } from '../constants/colors';
+import { useTheme } from '../context/ThemeContext';
+import LoadingState from '../components/LoadingState';
 
 const CATEGORIES = ['Evidence', 'Court Order', 'Agreement', 'Correspondence', 'ID Proof', 'Other'];
+
+const createStyles = (colors) => StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.background },
+    header: {
+        paddingTop: 48, paddingHorizontal: 16, paddingBottom: 12,
+        borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.surface,
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    },
+    h1: { fontSize: 16, fontWeight: '900', color: colors.text, flex: 1, textAlign: 'center' },
+    link: { color: colors.primary, fontWeight: '900' },
+    subtitle: { paddingHorizontal: 16, paddingTop: 8, color: colors.textSecondary, fontWeight: '700' },
+    form: { margin: 16, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+    formTitle: { fontWeight: '900', color: colors.text, marginBottom: 8 },
+    uploadBtn: { backgroundColor: colors.primary, borderRadius: 10, paddingVertical: 12, alignItems: 'center', marginBottom: 8 },
+    uploadBtnText: { color: colors.white, fontWeight: '900' },
+    orText: { textAlign: 'center', color: colors.textSecondary, fontSize: 12, marginVertical: 6 },
+    label: { fontWeight: '800', color: colors.textSecondary, fontSize: 12, textTransform: 'uppercase', marginTop: 8, marginBottom: 4 },
+    input: { backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, color: colors.text, marginTop: 4 },
+    catPills: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+    catPill: { borderWidth: 1, borderColor: colors.border, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: colors.surface },
+    catPillOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+    catPillText: { color: colors.text, fontWeight: '700', fontSize: 12 },
+    catPillTextOn: { color: colors.white },
+    saveBtn: { marginTop: 10, backgroundColor: colors.primary, borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
+    saveBtnDisabled: { opacity: 0.6 },
+    saveBtnText: { color: colors.white, fontWeight: '900' },
+    card: { marginBottom: 10, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+    cardTop: { flexDirection: 'row', alignItems: 'flex-start' },
+    docName: { fontWeight: '900', color: colors.text },
+    meta: { marginTop: 3, color: colors.textSecondary, fontSize: 12 },
+    cardActions: { marginLeft: 10, gap: 8, alignItems: 'flex-end' },
+    actionBtn: { backgroundColor: colors.primary, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
+    actionBtnText: { color: colors.white, fontWeight: '800', fontSize: 12 },
+    danger: { color: colors.error, fontWeight: '900', fontSize: 13 },
+    empty: { paddingHorizontal: 16, paddingVertical: 10, color: colors.textSecondary },
+});
 
 export default function CaseDocumentsScreen() {
     const navigation = useNavigation();
@@ -13,18 +50,26 @@ export default function CaseDocumentsScreen() {
     const caseId = route.params?.caseId;
     const caseTitle = route.params?.caseTitle || 'Case';
 
-    const { cases, clients, logActivity } = useApp();
+    const { cases, clients, logActivity, loading } = useApp();
+    const { colors } = useTheme();
+    const styles = useMemo(() => createStyles(colors), [colors]);
     const [docs, setDocs] = useState([]);
+    const [docsLoading, setDocsLoading] = useState(true);
     const [draft, setDraft] = useState({ name: '', category: 'Other', tags: '' });
 
     const refresh = useCallback(async () => {
-        const db = await getDb();
-        const query = caseId
-            ? 'SELECT * FROM documents WHERE case_id = ? ORDER BY datetime(created_at) DESC'
-            : 'SELECT * FROM documents ORDER BY datetime(created_at) DESC';
-        const params = caseId ? [caseId] : [];
-        const rows = await db.getAllAsync(query, params);
-        setDocs(rows ?? []);
+        setDocsLoading(true);
+        try {
+            const db = await getDb();
+            const query = caseId
+                ? 'SELECT * FROM documents WHERE case_id = ? ORDER BY datetime(created_at) DESC'
+                : 'SELECT * FROM documents ORDER BY datetime(created_at) DESC';
+            const params = caseId ? [caseId] : [];
+            const rows = await db.getAllAsync(query, params);
+            setDocs(rows ?? []);
+        } finally {
+            setDocsLoading(false);
+        }
     }, [caseId]);
 
     useEffect(() => { refresh(); }, [refresh]);
@@ -105,6 +150,7 @@ export default function CaseDocumentsScreen() {
     };
 
     return (
+        (loading || docsLoading) ? <LoadingState message="Loading documents..." /> : (
         <View style={styles.container}>
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.goBack()}>
@@ -195,41 +241,6 @@ export default function CaseDocumentsScreen() {
                 ListEmptyComponent={<Text style={styles.empty}>No documents yet.</Text>}
             />
         </View>
+        )
     );
 }
-
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
-    header: {
-        paddingTop: 48, paddingHorizontal: 16, paddingBottom: 12,
-        borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.surface,
-        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    },
-    h1: { fontSize: 16, fontWeight: '900', color: colors.text, flex: 1, textAlign: 'center' },
-    link: { color: colors.primary, fontWeight: '900' },
-    subtitle: { paddingHorizontal: 16, paddingTop: 8, color: colors.textSecondary, fontWeight: '700' },
-    form: { margin: 16, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
-    formTitle: { fontWeight: '900', color: colors.text, marginBottom: 8 },
-    uploadBtn: { backgroundColor: colors.primary, borderRadius: 10, paddingVertical: 12, alignItems: 'center', marginBottom: 8 },
-    uploadBtnText: { color: colors.white, fontWeight: '900' },
-    orText: { textAlign: 'center', color: colors.textSecondary, fontSize: 12, marginVertical: 6 },
-    label: { fontWeight: '800', color: colors.textSecondary, fontSize: 12, textTransform: 'uppercase', marginTop: 8, marginBottom: 4 },
-    input: { backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, color: colors.text, marginTop: 4 },
-    catPills: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-    catPill: { borderWidth: 1, borderColor: colors.border, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: colors.surface },
-    catPillOn: { backgroundColor: colors.primary, borderColor: colors.primary },
-    catPillText: { color: colors.text, fontWeight: '700', fontSize: 12 },
-    catPillTextOn: { color: colors.white },
-    saveBtn: { marginTop: 10, backgroundColor: colors.primary, borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
-    saveBtnDisabled: { opacity: 0.6 },
-    saveBtnText: { color: colors.white, fontWeight: '900' },
-    card: { marginBottom: 10, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
-    cardTop: { flexDirection: 'row', alignItems: 'flex-start' },
-    docName: { fontWeight: '900', color: colors.text },
-    meta: { marginTop: 3, color: colors.textSecondary, fontSize: 12 },
-    cardActions: { marginLeft: 10, gap: 8, alignItems: 'flex-end' },
-    actionBtn: { backgroundColor: colors.primary, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
-    actionBtnText: { color: colors.white, fontWeight: '800', fontSize: 12 },
-    danger: { color: colors.error, fontWeight: '900', fontSize: 13 },
-    empty: { paddingHorizontal: 16, paddingVertical: 10, color: colors.textSecondary },
-});

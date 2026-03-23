@@ -2,18 +2,74 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { getDb } from '../database/db';
-import { colors } from '../constants/colors';
+import { useTheme } from '../context/ThemeContext';
+import LoadingState from '../components/LoadingState';
+
+const createStyles = (colors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
+  header: {
+    paddingTop: 48,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    backgroundColor: colors.surface,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  h1: { fontSize: 16, fontWeight: '900', color: colors.text },
+  link: { color: colors.primary, fontWeight: '900' },
+  searchWrap: { padding: 16 },
+  search: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: colors.text,
+  },
+  card: {
+    marginHorizontal: 16,
+    marginBottom: 10,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  title: { fontSize: 15, fontWeight: '900', color: colors.text, flex: 1, marginRight: 8 },
+  section: { marginTop: 4, fontWeight: '700', color: colors.textSecondary },
+  content: { marginTop: 6, color: colors.text, fontSize: 13, lineHeight: 18 },
+  bookmarkBtn: { paddingHorizontal: 4, paddingVertical: 4 },
+  bookmarkText: { fontSize: 20, color: colors.textSecondary },
+  bookmarkOn: { color: colors.warning },
+  empty: { paddingHorizontal: 16, paddingVertical: 10, color: colors.textSecondary },
+});
 
 export default function BareActsScreen() {
   const navigation = useNavigation();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [acts, setActs] = useState([]);
+  const [actsLoading, setActsLoading] = useState(true);
   const [q, setQ] = useState('');
 
   useEffect(() => {
     (async () => {
       const db = await getDb();
-      const rows = await db.getAllAsync('SELECT * FROM bare_acts ORDER BY act_title ASC, section ASC');
-      setActs(rows ?? []);
+      try {
+        const rows = await db.getAllAsync('SELECT * FROM bare_acts ORDER BY act_title ASC, section ASC');
+        setActs(rows ?? []);
+      } finally {
+        setActsLoading(false);
+      }
     })();
   }, []);
 
@@ -27,6 +83,10 @@ export default function BareActsScreen() {
       return title.includes(query) || section.includes(query) || content.includes(query);
     });
   }, [acts, q]);
+
+  if (actsLoading) {
+    return <LoadingState message="Loading bare acts..." />;
+  }
 
   const toggleBookmark = async (id) => {
     const next = acts.map((a) =>
@@ -83,52 +143,4 @@ export default function BareActsScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  header: {
-    paddingTop: 48,
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.surface,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  h1: { fontSize: 16, fontWeight: '900', color: colors.text },
-  link: { color: colors.primary, fontWeight: '900' },
-  searchWrap: { padding: 16 },
-  search: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: colors.text,
-  },
-  card: {
-    marginHorizontal: 16,
-    marginBottom: 10,
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  title: { fontSize: 15, fontWeight: '900', color: colors.text, flex: 1, marginRight: 8 },
-  section: { marginTop: 4, fontWeight: '700', color: colors.textSecondary },
-  content: { marginTop: 6, color: colors.text, fontSize: 13, lineHeight: 18 },
-  bookmarkBtn: { paddingHorizontal: 4, paddingVertical: 4 },
-  bookmarkText: { fontSize: 20, color: colors.textSecondary },
-  bookmarkOn: { color: colors.warning },
-  empty: { paddingHorizontal: 16, paddingVertical: 10, color: colors.textSecondary },
-});
 

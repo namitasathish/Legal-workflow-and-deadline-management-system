@@ -2,103 +2,10 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { View, Text, FlatList, StyleSheet, TouchableOpacity } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useApp } from '../context/AppContext';
-import { colors } from '../constants/colors';
+import { useTheme } from '../context/ThemeContext';
+import LoadingState from '../components/LoadingState';
 
-export default function ClosedCasesScreen() {
-    const navigation = useNavigation();
-    const { getClosedCaseStats, clientsById } = useApp();
-    const [stats, setStats] = useState(null);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        (async () => {
-            const s = await getClosedCaseStats();
-            setStats(s);
-            setLoading(false);
-        })();
-    }, [getClosedCaseStats]);
-
-    const courtEntries = useMemo(() => {
-        if (!stats?.byCourt) return [];
-        return Object.entries(stats.byCourt)
-            .map(([court, data]) => ({ court, ...data }))
-            .sort((a, b) => b.count - a.count);
-    }, [stats]);
-
-    return (
-        <View style={styles.container}>
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()}>
-                    <Text style={styles.link}>Back</Text>
-                </TouchableOpacity>
-                <Text style={styles.h1}>Closed Cases & Insights</Text>
-                <View style={{ width: 40 }} />
-            </View>
-
-            {loading ? (
-                <Text style={styles.empty}>Loading...</Text>
-            ) : (
-                <>
-                    {/* Stats Summary */}
-                    <View style={styles.statsRow}>
-                        <View style={styles.statCard}>
-                            <Text style={styles.statNumber}>{stats?.totalClosed || 0}</Text>
-                            <Text style={styles.statLabel}>Total Closed</Text>
-                        </View>
-                        <View style={styles.statCard}>
-                            <Text style={styles.statNumber}>{stats?.avgDuration || 0}</Text>
-                            <Text style={styles.statLabel}>Avg. Days</Text>
-                        </View>
-                    </View>
-
-                    {/* By Court */}
-                    {courtEntries.length > 0 && (
-                        <View style={styles.section}>
-                            <Text style={styles.sectionTitle}>Duration by Court</Text>
-                            {courtEntries.map((entry) => (
-                                <View key={entry.court} style={styles.courtRow}>
-                                    <Text style={styles.courtName} numberOfLines={1}>{entry.court}</Text>
-                                    <Text style={styles.courtStat}>{entry.count} cases · avg {entry.avgDays}d</Text>
-                                </View>
-                            ))}
-                        </View>
-                    )}
-
-                    {/* Case List */}
-                    <Text style={styles.sectionTitlePad}>All Closed Cases</Text>
-                    <FlatList
-                        data={stats?.rows || []}
-                        keyExtractor={(item) => item.id}
-                        contentContainerStyle={{ paddingBottom: 24 }}
-                        renderItem={({ item }) => {
-                            const clientName = item.client_id ? clientsById.get(item.client_id)?.name : '';
-                            return (
-                                <View style={styles.card}>
-                                    <View style={styles.cardTop}>
-                                        <Text style={styles.caseTitle} numberOfLines={1}>{item.case_title || 'Unknown Case'}</Text>
-                                        {item.outcome ? (
-                                            <View style={[styles.outcomePill, item.outcome === 'Won' ? styles.outcomeWon : item.outcome === 'Lost' ? styles.outcomeLost : styles.outcomeOther]}>
-                                                <Text style={styles.outcomeText}>{item.outcome}</Text>
-                                            </View>
-                                        ) : null}
-                                    </View>
-                                    {!!item.court_name && <Text style={styles.meta}>Court: {item.court_name}</Text>}
-                                    {!!clientName && <Text style={styles.meta}>Client: {clientName}</Text>}
-                                    <Text style={styles.meta}>Duration: {item.duration_days} days</Text>
-                                    {!!item.close_date && <Text style={styles.meta}>Closed: {item.close_date.slice(0, 10)}</Text>}
-                                    {!!item.delay_notes && <Text style={styles.notes}>Notes: {item.delay_notes}</Text>}
-                                </View>
-                            );
-                        }}
-                        ListEmptyComponent={<Text style={styles.empty}>No closed cases yet.</Text>}
-                    />
-                </>
-            )}
-        </View>
-    );
-}
-
-const styles = StyleSheet.create({
+const createStyles = (colors) => StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     header: {
         paddingTop: 48, paddingHorizontal: 16, paddingBottom: 12,
@@ -131,11 +38,107 @@ const styles = StyleSheet.create({
     cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     caseTitle: { flex: 1, fontSize: 15, fontWeight: '900', color: colors.text, marginRight: 8 },
     outcomePill: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
-    outcomeWon: { backgroundColor: '#dcfce7' },
-    outcomeLost: { backgroundColor: '#fde8e8' },
-    outcomeOther: { backgroundColor: '#fef9c3' },
+    outcomeWon: { backgroundColor: colors.successLight },
+    outcomeLost: { backgroundColor: colors.errorLight },
+    outcomeOther: { backgroundColor: colors.warningLight },
     outcomeText: { fontSize: 11, fontWeight: '800' },
     meta: { color: colors.textSecondary, marginTop: 3, fontSize: 13 },
     notes: { color: colors.text, marginTop: 6, fontSize: 13, lineHeight: 18, fontStyle: 'italic' },
     empty: { padding: 16, color: colors.textSecondary },
 });
+
+export default function ClosedCasesScreen() {
+    const navigation = useNavigation();
+    const { getClosedCaseStats, clientsById } = useApp();
+    const { colors } = useTheme();
+    const styles = useMemo(() => createStyles(colors), [colors]);
+    const [stats, setStats] = useState(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        (async () => {
+            const s = await getClosedCaseStats();
+            setStats(s);
+            setLoading(false);
+        })();
+    }, [getClosedCaseStats]);
+
+    const courtEntries = useMemo(() => {
+        if (!stats?.byCourt) return [];
+        return Object.entries(stats.byCourt)
+            .map(([court, data]) => ({ court, ...data }))
+            .sort((a, b) => b.count - a.count);
+    }, [stats]);
+
+    if (loading) {
+        return <LoadingState message="Loading closed cases..." />;
+    }
+
+    return (
+        <View style={styles.container}>
+            <View style={styles.header}>
+                <TouchableOpacity onPress={() => navigation.goBack()}>
+                    <Text style={styles.link}>Back</Text>
+                </TouchableOpacity>
+                <Text style={styles.h1}>Closed Cases & Insights</Text>
+                <View style={{ width: 40 }} />
+            </View>
+
+            <>
+                {/* Stats Summary */}
+                <View style={styles.statsRow}>
+                    <View style={styles.statCard}>
+                        <Text style={styles.statNumber}>{stats?.totalClosed || 0}</Text>
+                        <Text style={styles.statLabel}>Total Closed</Text>
+                    </View>
+                    <View style={styles.statCard}>
+                        <Text style={styles.statNumber}>{stats?.avgDuration || 0}</Text>
+                        <Text style={styles.statLabel}>Avg. Days</Text>
+                    </View>
+                </View>
+
+                {/* By Court */}
+                {courtEntries.length > 0 && (
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Duration by Court</Text>
+                        {courtEntries.map((entry) => (
+                            <View key={entry.court} style={styles.courtRow}>
+                                <Text style={styles.courtName} numberOfLines={1}>{entry.court}</Text>
+                                <Text style={styles.courtStat}>{entry.count} cases · avg {entry.avgDays}d</Text>
+                            </View>
+                        ))}
+                    </View>
+                )}
+
+                {/* Case List */}
+                <Text style={styles.sectionTitlePad}>All Closed Cases</Text>
+                <FlatList
+                    data={stats?.rows || []}
+                    keyExtractor={(item) => item.id}
+                    contentContainerStyle={{ paddingBottom: 24 }}
+                    renderItem={({ item }) => {
+                        const clientName = item.client_id ? clientsById.get(item.client_id)?.name : '';
+                        return (
+                            <View style={styles.card}>
+                                <View style={styles.cardTop}>
+                                    <Text style={styles.caseTitle} numberOfLines={1}>{item.case_title || 'Unknown Case'}</Text>
+                                    {item.outcome ? (
+                                        <View style={[styles.outcomePill, item.outcome === 'Won' ? styles.outcomeWon : item.outcome === 'Lost' ? styles.outcomeLost : styles.outcomeOther]}>
+                                            <Text style={styles.outcomeText}>{item.outcome}</Text>
+                                        </View>
+                                    ) : null}
+                                </View>
+                                {!!item.court_name && <Text style={styles.meta}>Court: {item.court_name}</Text>}
+                                {!!clientName && <Text style={styles.meta}>Client: {clientName}</Text>}
+                                <Text style={styles.meta}>Duration: {item.duration_days} days</Text>
+                                {!!item.close_date && <Text style={styles.meta}>Closed: {item.close_date.slice(0, 10)}</Text>}
+                                {!!item.delay_notes && <Text style={styles.notes}>Notes: {item.delay_notes}</Text>}
+                            </View>
+                        );
+                    }}
+                    ListEmptyComponent={<Text style={styles.empty}>No closed cases yet.</Text>}
+                />
+            </>
+        </View>
+    );
+}

@@ -1,11 +1,39 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { getDb } from '../database/db';
-import { colors } from '../constants/colors';
+import { useTheme } from '../context/ThemeContext';
+
+const createStyles = (colors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
+  header: {
+    paddingTop: 48,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    backgroundColor: colors.surface,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  h1: { fontSize: 16, fontWeight: '900', color: colors.text },
+  link: { color: colors.primary, fontWeight: '900' },
+  content: { padding: 16, paddingBottom: 40 },
+  label: { marginTop: 12, marginBottom: 4, fontWeight: '800', color: colors.textSecondary, fontSize: 12, textTransform: 'uppercase' },
+  input: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, color: colors.text },
+  textArea: { minHeight: 80, textAlignVertical: 'top' },
+  btn: { marginTop: 18, backgroundColor: colors.primary, borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
+  btnText: { color: colors.white, fontWeight: '900' },
+  firBox: { marginTop: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, backgroundColor: colors.surface },
+  firText: { color: colors.text, fontSize: 13, lineHeight: 18 },
+  hint: { marginTop: 6, color: colors.textSecondary, fontSize: 12 },
+});
 
 export default function FirBuilderScreen() {
   const navigation = useNavigation();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [form, setForm] = useState({
     complainantName: '',
     complainantAddress: '',
@@ -122,30 +150,4 @@ export default function FirBuilderScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  header: {
-    paddingTop: 48,
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.surface,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  h1: { fontSize: 16, fontWeight: '900', color: colors.text },
-  link: { color: colors.primary, fontWeight: '900' },
-  content: { padding: 16, paddingBottom: 40 },
-  label: { marginTop: 12, marginBottom: 4, fontWeight: '800', color: colors.textSecondary, fontSize: 12, textTransform: 'uppercase' },
-  input: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, color: colors.text },
-  textArea: { minHeight: 80, textAlignVertical: 'top' },
-  btn: { marginTop: 18, backgroundColor: colors.primary, borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
-  btnText: { color: colors.white, fontWeight: '900' },
-  firBox: { marginTop: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, backgroundColor: colors.surface },
-  firText: { color: colors.text, fontSize: 13, lineHeight: 18 },
-  hint: { marginTop: 6, color: colors.textSecondary, fontSize: 12 },
-});
 
