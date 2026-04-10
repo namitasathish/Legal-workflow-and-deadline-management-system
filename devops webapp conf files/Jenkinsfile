@@ -1,0 +1,158 @@
+// Jenkinsfile
+// CI Pipeline for Indian Judicial System
+// DevOps Course Demonstration — Stops at TESTING stage (no deployment)
+// ──────────────────────────────────────────────────────────────────────
+
+pipeline {
+    agent any
+
+    // Global environment variables
+    environment {
+        NODE_VERSION = '18'
+        APP_NAME     = 'Indian Judicial System'
+        REPO_URL     = 'https://github.com/namitasathish/Legal-workflow-and-deadline-management-system.git'
+        BRANCH       = 'main'
+    }
+
+    // Jenkins Pipeline Options
+    options {
+        timestamps()                         // Show timestamps in build log
+        timeout(time: 15, unit: 'MINUTES')   // Fail if pipeline takes too long
+        buildDiscarder(logRotator(numToKeepStr: '5')) // Keep only last 5 builds
+    }
+
+    stages {
+
+        // ─────────────────────────────────────────────────────────────
+        // STAGE 1: Pull from GitHub
+        // What this does: Checks out the latest code from our GitHub repo
+        // ─────────────────────────────────────────────────────────────
+        stage('Stage 1: Pull from GitHub') {
+            steps {
+                echo '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
+                echo '📥 Pulling latest code from GitHub...'
+                echo '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: "*/${BRANCH}"]],
+                    userRemoteConfigs: [[url: "${REPO_URL}"]]
+                ])
+                sh 'echo "✅ Code pulled successfully"'
+                sh 'git log --oneline -5'  // Show last 5 commits for visibility
+            }
+        }
+
+        // ─────────────────────────────────────────────────────────────
+        // STAGE 2: Install Dependencies
+        // What this does: Runs npm install to get all packages
+        // ─────────────────────────────────────────────────────────────
+        stage('Stage 2: Install Dependencies') {
+            steps {
+                echo '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
+                echo '📦 Installing Node.js dependencies...'
+                echo '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
+                dir('backend') {
+                    sh 'node --version'
+                    sh 'npm --version'
+                    sh 'npm install'
+                    sh 'echo "✅ All dependencies installed"'
+                    sh 'npm list --depth=0'  // Show what was installed
+                }
+            }
+        }
+
+        // ─────────────────────────────────────────────────────────────
+        // STAGE 3: Run Lint
+        // What this does: Checks code quality using ESLint
+        // Catches syntax errors and style issues before testing
+        // ─────────────────────────────────────────────────────────────
+        stage('Stage 3: Run Lint') {
+            steps {
+                echo '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
+                echo '🔍 Running ESLint to check code quality...'
+                echo '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
+                dir('backend') {
+                    sh 'npm run lint'
+                    sh 'echo "✅ Lint passed — no code style issues found"'
+                }
+            }
+        }
+
+        // ─────────────────────────────────────────────────────────────
+        // STAGE 4: Run Unit Tests (Jest)
+        // What this does: Runs all Jest test cases with coverage report
+        // THIS IS THE FINAL STAGE — we stop here (no deployment)
+        // ─────────────────────────────────────────────────────────────
+        stage('Stage 4: Run Unit Tests (Jest)') {
+            steps {
+                echo '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
+                echo '🧪 Running Jest unit tests with coverage...'
+                echo '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
+                dir('backend') {
+                    sh 'npm test -- --ci --reporters=default'
+                    sh 'echo "✅ All tests passed!"'
+                }
+            }
+            post {
+                always {
+                    echo '📊 Test results captured'
+                }
+                success {
+                    echo '🎉 All unit tests PASSED!'
+                }
+                failure {
+                    echo '❌ Some tests FAILED — check logs above'
+                }
+            }
+        }
+
+        // ─────────────────────────────────────────────────────────────
+        // STAGE 5: Build
+        // What this does: Verifies the application can start (smoke check)
+        // We confirm the app builds cleanly but do NOT deploy anywhere
+        // ─────────────────────────────────────────────────────────────
+        stage('Stage 5: Build') {
+            steps {
+                echo '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
+                echo '🏗️  Build verification (syntax check, no deployment)...'
+                echo '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
+                dir('backend') {
+                    sh 'node -e "require(\'./server\'); console.log(\'✅ Application loaded successfully — build OK\');"'
+                }
+                echo ''
+                echo '██████████████████████████████████████████████'
+                echo '██  ⛔  PIPELINE STOPS HERE (BY DESIGN)  ⛔  ██'
+                echo '██  Deployment stage is excluded for this     ██'
+                echo '██  DevOps course demonstration.              ██'
+                echo '██  Pipeline completed up to TESTING phase.   ██'
+                echo '██████████████████████████████████████████████'
+            }
+        }
+
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Post-Pipeline Actions (run regardless of success/failure)
+    // ─────────────────────────────────────────────────────────────
+    post {
+        success {
+            echo ''
+            echo '╔══════════════════════════════════════════════╗'
+            echo '║  ✅  PIPELINE COMPLETED SUCCESSFULLY          ║'
+            echo '║  All stages passed: Pull → Install → Lint    ║'
+            echo '║  → Test → Build                              ║'
+            echo '║  Execution stopped at TESTING phase.         ║'
+            echo '╚══════════════════════════════════════════════╝'
+        }
+        failure {
+            echo ''
+            echo '╔══════════════════════════════════════════════╗'
+            echo '║  ❌  PIPELINE FAILED — Check stage logs       ║'
+            echo '║  Fix errors and re-trigger the build.        ║'
+            echo '╚══════════════════════════════════════════════╝'
+        }
+        always {
+            echo '🕐 Pipeline execution finished at: ' + new Date().toString()
+        }
+    }
+}

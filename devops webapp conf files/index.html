@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Indian Judicial System — Case Tracking & Anonymous Filing</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════════
+       NAVIGATION BAR
+  ═══════════════════════════════════════════════ -->
+  <nav class="navbar" id="navbar">
+    <div class="nav-brand">
+      <div class="nav-logo">⚖️</div>
+      <div class="nav-title-group">
+        <span class="nav-title">Indian Judicial System</span>
+        <span class="nav-subtitle">Case Tracking & Anonymous Filing</span>
+      </div>
+    </div>
+    <ul class="nav-links">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#how-it-works">How It Works</a></li>
+      <li><a href="#benefits">Benefits</a></li>
+      <li><a href="#about">About</a></li>
+      <li><a href="admin.html" class="nav-admin-link">Admin</a></li>
+    </ul>
+  </nav>
+
+  <!-- ═══════════════════════════════════════════════
+       HERO SECTION
+  ═══════════════════════════════════════════════ -->
+  <section class="hero" id="home">
+    <div class="hero-content">
+      <h1 class="hero-title">Justice Made Simple</h1>
+      <p class="hero-subtitle">
+        Track your case status in real-time and file complaints anonymously. We're making the
+        Indian judicial system more accessible, transparent, and citizen-friendly.
+      </p>
+      <div class="hero-buttons">
+        <button class="btn btn-primary" onclick="scrollToSection('track-section')">
+          🔍 Track Your Case
+        </button>
+        <button class="btn btn-secondary" onclick="scrollToSection('file-section')">
+          🛡️ File Anonymously
+        </button>
+      </div>
+    </div>
+    <div class="hero-wave"></div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       WHAT IS THIS SYSTEM?
+  ═══════════════════════════════════════════════ -->
+  <section class="what-is-this" id="what-is-this">
+    <div class="container">
+      <h2 class="section-title">What Is This System?</h2>
+      <p class="section-desc">
+        Think of it as your personal assistant for navigating the legal system. Instead of running from
+        pillar to post or waiting in long queues, you can now <strong>track your court case</strong> from
+        your phone or computer. And if you've witnessed something wrong but fear speaking up? We've got
+        you covered with <strong>completely anonymous filing</strong>.
+      </p>
+      <div class="two-col-cards">
+        <div class="feature-card">
+          <div class="feature-icon">📋</div>
+          <h3>Automated Case Tracking</h3>
+          <p>No more confusion about hearing dates or case status. Just enter your case number and get
+          instant updates — next hearing date, case progress, judge details, and more. It's like tracking
+          your food delivery, but for justice!</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🔒</div>
+          <h3>Anonymous Case Filing</h3>
+          <p>Worried about retaliation? We understand. File complaints about corruption, misconduct, or
+          illegal activities without revealing your identity. Your voice matters, and we protect it.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       KEY FEATURES
+  ═══════════════════════════════════════════════ -->
+  <section class="key-features" id="features">
+    <div class="container">
+      <h2 class="section-title">Key Features</h2>
+      <p class="section-subtitle">Built with citizens in mind — simple, secure, and actually useful.</p>
+      <div class="features-grid">
+        <div class="feat-card">
+          <div class="feat-icon-wrap"><span class="feat-icon">🕐</span></div>
+          <h4>Real-Time Updates</h4>
+          <p>Get instant notifications when your case status changes. No more guessing games.</p>
+        </div>
+        <div class="feat-card">
+          <div class="feat-icon-wrap"><span class="feat-icon">🔐</span></div>
+          <h4>End-to-End Encryption</h4>
+          <p>Your data is encrypted and secure. We take privacy as seriously as you do.</p>
+        </div>
+        <div class="feat-card">
+          <div class="feat-icon-wrap"><span class="feat-icon">🌐</span></div>
+          <h4>Multi-Language Support</h4>
+          <p>Access the system in Hindi, English, and regional languages. Justice in your language.</p>
+        </div>
+        <div class="feat-card">
+          <div class="feat-icon-wrap"><span class="feat-icon">🔔</span></div>
+          <h4>SMS & Email Alerts</h4>
+          <p>Receive updates via SMS or email. Stay informed even without internet access.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       TRACK YOUR CASE — LIVE DEMO
+  ═══════════════════════════════════════════════ -->
+  <section class="track-section" id="track-section">
+    <div class="container">
+      <h2 class="section-title dark">Track Your Case</h2>
+      <p class="section-subtitle dark">Enter your Case ID below to get the latest status update.</p>
+
+      <div class="form-card">
+        <div class="form-group">
+          <label for="caseId">Your Case ID</label>
+          <div class="input-row">
+            <input type="text" id="caseId" placeholder="e.g. IJC-ABCD12-EF3456" maxlength="30"/>
+            <button class="btn btn-primary" onclick="trackCase()">🔍 Track</button>
+          </div>
+          <span class="form-hint">💡 The Case ID was given to you when you filed your complaint.</span>
+        </div>
+
+        <!-- Sample Case IDs for Demo -->
+        <div class="demo-ids">
+          <p class="demo-label">🎯 Demo — Click to try a sample Case ID:</p>
+          <div class="demo-buttons">
+            <button class="demo-btn" onclick="fillDemo('IJC-DEMO01-PEND01')">Pending Case</button>
+            <button class="demo-btn" onclick="fillDemo('IJC-DEMO02-HEAR01')">Hearing Scheduled</button>
+            <button class="demo-btn" onclick="fillDemo('IJC-DEMO03-CLOS01')">Closed Case</button>
+          </div>
+        </div>
+
+        <!-- Result Box -->
+        <div class="result-box" id="trackResult" style="display:none;"></div>
+
+        <!-- Loading Spinner -->
+        <div class="loader" id="trackLoader" style="display:none;">
+          <div class="spinner"></div><span>Fetching your case details...</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       HOW IT WORKS
+  ═══════════════════════════════════════════════ -->
+  <section class="how-it-works" id="how-it-works">
+    <div class="container">
+      <h2 class="section-title">How It Works</h2>
+      <p class="section-subtitle">Three simple steps to access justice</p>
+      <div class="steps-row">
+        <div class="step-card">
+          <div class="step-num">01</div>
+          <div class="step-icon-wrap">📝</div>
+          <h4>Enter Details</h4>
+          <p>Simply enter your case number or fill out the anonymous complaint form. It takes less than 2 minutes.</p>
+        </div>
+        <div class="step-arrow">›</div>
+        <div class="step-card">
+          <div class="step-num">02</div>
+          <div class="step-icon-wrap">👁️</div>
+          <h4>View Status</h4>
+          <p>See your case details, hearing dates, and progress in a clean, easy-to-understand format.</p>
+        </div>
+        <div class="step-arrow">›</div>
+        <div class="step-card">
+          <div class="step-num">03</div>
+          <div class="step-icon-wrap">🔔</div>
+          <h4>Get Notified</h4>
+          <p>Receive automatic updates via SMS, email, or app notifications whenever something changes.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       ANONYMOUS CASE FILING FORM
+  ═══════════════════════════════════════════════ -->
+  <section class="file-section" id="file-section">
+    <div class="container">
+      <h2 class="section-title dark">File a Complaint Anonymously</h2>
+      <p class="section-subtitle dark">Your identity is never stored. Not even a hint of it. Go ahead — speak up.</p>
+
+      <div class="form-card wide">
+        <div class="privacy-banner">
+          🛡️ <strong>Privacy Guarantee:</strong> We do not store your IP address, device info, or any identifying data. Your Case ID is generated randomly and cannot be linked back to you.
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="caseTitle">Complaint Title <span class="required">*</span></label>
+            <input type="text" id="caseTitle" placeholder="e.g. Bribery at Local RTO Office" maxlength="200"/>
+            <span class="char-count" id="titleCount">0/200</span>
+          </div>
+        </div>
+
+        <div class="form-row two-col">
+          <div class="form-group">
+            <label for="category">Category <span class="required">*</span></label>
+            <select id="category">
+              <option value="">— Select Category —</option>
+              <option value="Corruption">Corruption</option>
+              <option value="Misconduct">Misconduct</option>
+              <option value="Harassment">Harassment</option>
+              <option value="Bribery">Bribery</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="complainantName">Your Name <span class="optional">(Optional)</span></label>
+            <input type="text" id="complainantName" placeholder="Leave blank to stay anonymous"/>
+            <span class="form-hint">🤫 Leaving this blank = 100% anonymous</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="description">Describe What Happened <span class="required">*</span></label>
+          <textarea id="description" rows="6" placeholder="Describe the incident in as much detail as possible. What happened, when, where, and who was involved? The more details you provide, the better." maxlength="2000"></textarea>
+          <span class="char-count" id="descCount">0/2000</span>
+        </div>
+
+        <div class="form-actions">
+          <button class="btn btn-primary large" onclick="fileCase()">🛡️ File My Complaint</button>
+          <button class="btn btn-outline" onclick="clearForm()">↺ Clear Form</button>
+        </div>
+
+        <!-- Filing Result -->
+        <div class="result-box" id="fileResult" style="display:none;"></div>
+        <div class="loader" id="fileLoader" style="display:none;">
+          <div class="spinner"></div><span>Filing your complaint securely...</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       BENEFITS
+  ═══════════════════════════════════════════════ -->
+  <section class="benefits" id="benefits">
+    <div class="container">
+      <h2 class="section-title light">Benefits for Citizens</h2>
+      <p class="section-subtitle light">We're not just building technology — we're building trust in the justice system.</p>
+      <div class="benefits-grid">
+        <div class="benefit-card">
+          <h4>💰 Save Time & Money</h4>
+          <p>No need to travel to court or hire someone just to check your case status.</p>
+        </div>
+        <div class="benefit-card">
+          <h4>😮‍💨 Reduce Anxiety</h4>
+          <p>Know exactly where your case stands instead of wondering and worrying.</p>
+        </div>
+        <div class="benefit-card">
+          <h4>🗣️ Speak Without Fear</h4>
+          <p>Anonymous filing lets you report wrongdoing without putting yourself at risk.</p>
+        </div>
+        <div class="benefit-card">
+          <h4>🌙 24/7 Access</h4>
+          <p>Check your case anytime, anywhere. The system never sleeps.</p>
+        </div>
+        <div class="benefit-card">
+          <h4>📜 Paper Trail</h4>
+          <p>Every update is logged and timestamped. Complete transparency.</p>
+        </div>
+        <div class="benefit-card">
+          <h4>🏘️ Equal Access</h4>
+          <p>Whether you're in a metro city or a village — same access, same features.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       CALL TO ACTION
+  ═══════════════════════════════════════════════ -->
+  <section class="cta-section">
+    <div class="container">
+      <h2>Ready to Track Your Case?</h2>
+      <p>Join thousands of citizens who have already simplified their legal journey. It's free, secure, and takes just a few clicks.</p>
+      <div class="hero-buttons">
+        <button class="btn btn-cta-primary" onclick="scrollToSection('track-section')">🔍 Track Your Case</button>
+        <button class="btn btn-cta-secondary" onclick="scrollToSection('file-section')">🛡️ File Anonymously</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       ABOUT THIS PROJECT
+  ═══════════════════════════════════════════════ -->
+  <section class="about-section" id="about">
+    <div class="container">
+      <h2 class="section-title">About This Project</h2>
+      <p>
+        This project was developed as part of a <strong>DevOps course demonstration</strong>, showcasing modern
+        web development practices including version control with Git, clean code structure, and responsive design principles.
+      </p>
+      <p>
+        The concept addresses a real problem faced by millions of Indians — the complexity of tracking legal cases
+        and the fear of filing complaints. While this is a demonstration project, it represents the potential for
+        technology to make justice more accessible to everyone.
+      </p>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       FOOTER
+  ═══════════════════════════════════════════════ -->
+  <footer class="footer">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <div class="footer-logo">⚖️ Indian Judicial System</div>
+        <p>Making justice accessible, transparent, and citizen-friendly through technology.</p>
+      </div>
+      <div class="footer-links">
+        <h5>Quick Links</h5>
+        <ul>
+          <li><a href="#features">Features</a></li>
+          <li><a href="#how-it-works">How It Works</a></li>
+          <li><a href="#benefits">Benefits</a></li>
+          <li><a href="#about">About</a></li>
+          <li><a href="admin.html">Admin Panel</a></li>
+        </ul>
+      </div>
+      <div class="footer-contact">
+        <h5>Contact</h5>
+        <p>Email: info@ijscasetrack.gov.in</p>
+        <p>Helpline: 1800-XXX-XXXX</p>
+        <p>Available: 24/7</p>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>© 2025 Indian Judicial System. DevOps Course Demonstration.</p>
+      <p>Built with ❤️ by University Students</p>
+    </div>
+  </footer>
+
+  <script src="js/app.js"></script>
+</body>
+</html>

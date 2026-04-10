@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Admin Panel — Indian Judicial System</title>
+  <link rel="stylesheet" href="css/style.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+</head>
+<body class="admin-body">
+
+  <!-- Admin Navbar -->
+  <nav class="navbar">
+    <div class="nav-brand">
+      <div class="nav-logo">⚖️</div>
+      <div class="nav-title-group">
+        <span class="nav-title">Indian Judicial System</span>
+        <span class="nav-subtitle">Admin Panel — All Filed Cases</span>
+      </div>
+    </div>
+    <div class="nav-links">
+      <a href="index.html" class="btn btn-outline small">← Back to Home</a>
+    </div>
+  </nav>
+
+  <div class="admin-container">
+    <div class="admin-header">
+      <h1>📊 Case Management Dashboard</h1>
+      <p>View and manage all complaints filed through the system. This panel is for authorized personnel only.</p>
+    </div>
+
+    <!-- Stats Row -->
+    <div class="stats-row" id="statsRow">
+      <div class="stat-card">
+        <div class="stat-number" id="statTotal">—</div>
+        <div class="stat-label">Total Cases</div>
+      </div>
+      <div class="stat-card pending">
+        <div class="stat-number" id="statPending">—</div>
+        <div class="stat-label">Pending</div>
+      </div>
+      <div class="stat-card hearing">
+        <div class="stat-number" id="statHearing">—</div>
+        <div class="stat-label">Hearing Scheduled</div>
+      </div>
+      <div class="stat-card closed">
+        <div class="stat-number" id="statClosed">—</div>
+        <div class="stat-label">Closed</div>
+      </div>
+      <div class="stat-card anon">
+        <div class="stat-number" id="statAnon">—</div>
+        <div class="stat-label">Anonymous</div>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="admin-filters">
+      <select id="filterStatus" onchange="loadCases()">
+        <option value="">All Statuses</option>
+        <option value="Pending">Pending</option>
+        <option value="Hearing Scheduled">Hearing Scheduled</option>
+        <option value="Under Review">Under Review</option>
+        <option value="Closed">Closed</option>
+      </select>
+      <select id="filterCategory" onchange="loadCases()">
+        <option value="">All Categories</option>
+        <option value="Corruption">Corruption</option>
+        <option value="Misconduct">Misconduct</option>
+        <option value="Harassment">Harassment</option>
+        <option value="Bribery">Bribery</option>
+        <option value="Other">Other</option>
+      </select>
+      <button class="btn btn-primary small" onclick="loadCases()">🔄 Refresh</button>
+    </div>
+
+    <!-- Cases Table -->
+    <div class="table-wrap">
+      <table class="cases-table" id="casesTable">
+        <thead>
+          <tr>
+            <th>Case ID</th>
+            <th>Title</th>
+            <th>Category</th>
+            <th>Filed By</th>
+            <th>Status</th>
+            <th>Filed On</th>
+            <th>Court</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="casesBody">
+          <tr><td colspan="8" class="loading-row">⏳ Loading cases...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    <div class="pagination" id="pagination"></div>
+
+    <!-- Update Status Modal -->
+    <div class="modal-overlay" id="modalOverlay" style="display:none;">
+      <div class="modal">
+        <h3>📝 Update Case Status</h3>
+        <p id="modalCaseId" class="modal-case-id"></p>
+        <div class="form-group">
+          <label>New Status</label>
+          <select id="newStatus">
+            <option value="Pending">Pending</option>
+            <option value="Hearing Scheduled">Hearing Scheduled</option>
+            <option value="Under Review">Under Review</option>
+            <option value="Closed">Closed</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Judge (optional)</label>
+          <input type="text" id="newJudge" placeholder="Hon. Justice Name"/>
+        </div>
+        <div class="form-group">
+          <label>Next Action</label>
+          <input type="text" id="newNextAction" placeholder="What happens next?"/>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-primary" onclick="updateStatus()">✅ Update</button>
+          <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+        </div>
+        <div id="modalResult"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/admin.js"></script>
+</body>
+</html>
